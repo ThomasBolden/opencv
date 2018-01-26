@@ -27,12 +27,14 @@ macro(ippiw_debugmsg MESSAGE)
     message(STATUS "${MESSAGE}")
   endif()
 endmacro()
+file(TO_CMAKE_PATH "${IPPROOT}" IPPROOT)
 
 # This function detects Intel IPP IW version by analyzing .h file
 macro(ippiw_setup PATH BUILD)
-  set(FILE "${PATH}/include/iw/iw_version.h")
+  set(FILE "${PATH}/include/iw/iw_ll.h") # check if Intel IPP IW is OpenCV specific
   ippiw_debugmsg("Checking path: ${PATH}")
   if(EXISTS "${FILE}")
+    set(FILE "${PATH}/include/iw/iw_version.h")
     ippiw_debugmsg("vfile\tok")
     file(STRINGS "${FILE}" IW_VERSION_MAJOR  REGEX "IW_VERSION_MAJOR")
     file(STRINGS "${FILE}" IW_VERSION_MINOR  REGEX "IW_VERSION_MINOR")
@@ -68,6 +70,7 @@ macro(ippiw_setup PATH BUILD)
           set(IPP_IW_LIBRARIES ${IPP_IW_LIBRARY})
           execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OpenCV_SOURCE_DIR}/3rdparty/ippicv/CMakeLists.txt" "${IPP_IW_PATH}/")
           add_subdirectory("${IPP_IW_PATH}/" ${OpenCV_BINARY_DIR}/3rdparty/ippiw)
+
           set(HAVE_IPP_IW 1)
           return()
         endif()
@@ -84,8 +87,22 @@ macro(ippiw_setup PATH BUILD)
           message(STATUS "found Intel IPP IW binaries: ${IW_VERSION_MAJOR}.${IW_VERSION_MINOR}.${IW_VERSION_UPDATE}")
           message(STATUS "at: ${IPP_IW_PATH}")
 
+          add_library(ippiw STATIC IMPORTED)
+          set_target_properties(ippiw PROPERTIES
+            IMPORTED_LINK_INTERFACE_LIBRARIES ""
+            IMPORTED_LOCATION "${FILE}"
+          )
+          if (NOT BUILD_SHARED_LIBS)
+            # CMake doesn't support "install(TARGETS ${name} ...)" command with imported targets
+            install(FILES "${FILE}"
+                    DESTINATION ${OPENCV_3P_LIB_INSTALL_PATH} COMPONENT dev)
+            set(IPPIW_INSTALL_PATH "${CMAKE_INSTALL_PREFIX}/${OPENCV_3P_LIB_INSTALL_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}ipp_iw${CMAKE_STATIC_LIBRARY_SUFFIX}" CACHE INTERNAL "" FORCE)
+            set(IPPIW_LOCATION_PATH "${FILE}" CACHE INTERNAL "" FORCE)
+          endif()
+
           set(IPP_IW_INCLUDES "${IPP_IW_PATH}/include")
-          set(IPP_IW_LIBRARIES ${FILE})
+          set(IPP_IW_LIBRARIES ippiw)
+
           set(HAVE_IPP_IW 1)
           set(BUILD_IPP_IW 0)
           return()
@@ -104,7 +121,7 @@ elseif((UNIX AND NOT ANDROID) OR (UNIX AND ANDROID_ABI MATCHES "x86"))
 elseif(WIN32 AND NOT ARM)
   set(IW_PACKAGE_SUBDIR "ippiw_win")
 else()
-  message(SEND_ERROR "Improper system for Intel IPP Integrations Wrappers. This message shouldn't appera. Check Intel IPP configurations steps")
+  message(SEND_ERROR "Improper system for Intel IPP Integrations Wrappers. This message shouldn't appear. Check Intel IPP configurations steps")
   return()
 endif()
 
@@ -120,7 +137,8 @@ if(BUILD_IPP_IW)
   ippiw_setup("${OpenCV_SOURCE_DIR}/3rdparty/ippiw" 1)
 
   # Package sources
-  ippiw_setup("${IPPROOT}/../${IW_PACKAGE_SUBDIR}/" 1)
+  get_filename_component(__PATH "${IPPROOT}/../${IW_PACKAGE_SUBDIR}/" ABSOLUTE)
+  ippiw_setup("${__PATH}" 1)
 endif()
 
 
@@ -138,7 +156,7 @@ ippiw_setup("${IPPROOT}/../${IW_PACKAGE_SUBDIR}/" 0)
 
 
 # take Intel IPP IW from ICV package
-if(NOT HAVE_IPP_ICV_ONLY AND BUILD_IPP_IW)
+if(NOT HAVE_IPP_ICV AND BUILD_IPP_IW)
   message(STATUS "Cannot find Intel IPP IW. Checking \"Intel IPP for OpenCV\" package")
   set(TEMP_ROOT 0)
   include("${OpenCV_SOURCE_DIR}/3rdparty/ippicv/ippicv.cmake")

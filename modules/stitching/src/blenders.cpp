@@ -217,6 +217,7 @@ Rect FeatherBlender::createWeightMaps(const std::vector<UMat> &masks, const std:
 
 MultiBandBlender::MultiBandBlender(int try_gpu, int num_bands, int weight_type)
 {
+    num_bands_ = 0;
     setNumBands(num_bands);
 
 #if defined(HAVE_OPENCV_CUDAARITHM) && defined(HAVE_OPENCV_CUDAWARPING)
@@ -477,7 +478,7 @@ void MultiBandBlender::feed(InputArray _img, InputArray mask, Point tl)
     {
         Rect rc(x_tl, y_tl, x_br - x_tl, y_br - y_tl);
 #ifdef HAVE_OPENCL
-        if ( !cv::ocl::useOpenCL() ||
+        if ( !cv::ocl::isOpenCLActivated() ||
              !ocl_MultiBandBlender_feed(src_pyr_laplace[i], weight_pyr_gauss[i],
                     dst_pyr_laplace_[i](rc), dst_band_weights_[i](rc)) )
 #endif
@@ -632,7 +633,7 @@ void normalizeUsingWeightMap(InputArray _weight, InputOutputArray _src)
 #endif
 
 #ifdef HAVE_OPENCL
-    if ( !cv::ocl::useOpenCL() ||
+    if ( !cv::ocl::isOpenCLActivated() ||
             !ocl_normalizeUsingWeightMap(_weight, _src) )
 #endif
     {

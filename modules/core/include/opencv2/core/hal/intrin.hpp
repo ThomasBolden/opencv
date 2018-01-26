@@ -308,6 +308,7 @@ CV_CPU_OPTIMIZATION_HAL_NAMESPACE_END
 #ifdef CV_DOXYGEN
 #   undef CV_SSE2
 #   undef CV_NEON
+#   undef CV_VSX
 #endif
 
 #if CV_SSE2
@@ -317,6 +318,10 @@ CV_CPU_OPTIMIZATION_HAL_NAMESPACE_END
 #elif CV_NEON
 
 #include "opencv2/core/hal/intrin_neon.hpp"
+
+#elif CV_VSX
+
+#include "opencv2/core/hal/intrin_vsx.hpp"
 
 #else
 
@@ -432,6 +437,29 @@ template <> struct V_RegTrait128<double> {
     static v_float64x2 all(double val) { return v_setall_f64(val); }
 };
 #endif
+
+inline unsigned int trailingZeros32(unsigned int value) {
+#if defined(_MSC_VER)
+#if (_MSC_VER < 1700) || defined(_M_ARM)
+    unsigned long index = 0;
+    _BitScanForward(&index, value);
+    return (unsigned int)index;
+#else
+    return _tzcnt_u32(value);
+#endif
+#elif defined(__GNUC__) || defined(__GNUG__)
+    return __builtin_ctz(value);
+#elif defined(__ICC) || defined(__INTEL_COMPILER)
+    return _bit_scan_forward(value);
+#elif defined(__clang__)
+    return llvm.cttz.i32(value, true);
+#else
+    static const int MultiplyDeBruijnBitPosition[32] = {
+        0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
+        31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9 };
+    return MultiplyDeBruijnBitPosition[((uint32_t)((value & -value) * 0x077CB531U)) >> 27];
+#endif
+}
 
 #ifndef CV_DOXYGEN
 CV_CPU_OPTIMIZATION_HAL_NAMESPACE_END

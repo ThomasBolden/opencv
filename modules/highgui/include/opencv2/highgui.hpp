@@ -361,7 +361,7 @@ Otherwise, the image is scaled to fit the window. The function may scale the ima
 -   If the image is 8-bit unsigned, it is displayed as is.
 -   If the image is 16-bit unsigned or 32-bit integer, the pixels are divided by 256. That is, the
     value range [0,255\*256] is mapped to [0,255].
--   If the image is 32-bit floating-point, the pixel values are multiplied by 255. That is, the
+-   If the image is 32-bit or 64-bit floating-point, the pixel values are multiplied by 255. That is, the
     value range [0,1] is mapped to [0,255].
 
 If window was created with OpenGL support, cv::imshow also support ogl::Buffer , ogl::Texture2D and
@@ -401,6 +401,12 @@ CV_EXPORTS_W void imshow(const String& winname, InputArray mat);
  */
 CV_EXPORTS_W void resizeWindow(const String& winname, int width, int height);
 
+/** @overload
+@param winname Window name.
+@param size The new window size.
+*/
+CV_EXPORTS_W void resizeWindow(const String& winname, const cv::Size& size);
+
 /** @brief Moves window to the specified position
 
 @param winname Name of the window.
@@ -435,6 +441,16 @@ The function getWindowProperty returns properties of a window.
 @sa setWindowProperty
  */
 CV_EXPORTS_W double getWindowProperty(const String& winname, int prop_id);
+
+/** @brief Provides rectangle of image in the window.
+
+The function getWindowImageRect returns the client screen coordinates, width and height of the image rendering area.
+
+@param winname Name of the window.
+
+@sa resizeWindow moveWindow
+ */
+CV_EXPORTS_W Rect getWindowImageRect(const String& winname);
 
 /** @brief Sets mouse handler for the specified window
 
@@ -491,7 +507,7 @@ CV_EXPORTS_W Rect selectROI(InputArray img, bool showCrosshair = true, bool from
 /** @brief Selects ROIs on the given image.
 Function creates a window and allows user to select a ROIs using mouse.
 Controls: use `space` or `enter` to finish current selection and start a new one,
-use `ecs` to terminate multiple ROI selection process.
+use `esc` to terminate multiple ROI selection process.
 
 @param windowName name of the window where selection process will be shown.
 @param img image to select a ROI.
@@ -592,7 +608,7 @@ panel.
 
 @param trackbarname Name of the trackbar.
 @param winname Name of the window that is the parent of trackbar.
-@param minval New maximum position.
+@param minval New minimum position.
  */
 CV_EXPORTS_W void setTrackbarMin(const String& trackbarname, const String& winname, int minval);
 

@@ -48,6 +48,23 @@
 //! @addtogroup core_utils
 //! @{
 
+#if !defined CV_DOXYGEN && !defined CV_IGNORE_DEBUG_BUILD_GUARD
+#if (defined(_MSC_VER) && (defined(DEBUG) || defined(_DEBUG))) || \
+    (defined(_GLIBCXX_DEBUG) || defined(_GLIBCXX_DEBUG_PEDANTIC))
+// Guard to prevent using of binary incompatible binaries / runtimes
+// https://github.com/opencv/opencv/pull/9161
+#define CV__DEBUG_NS_BEGIN namespace debug_build_guard {
+#define CV__DEBUG_NS_END }
+namespace cv { namespace debug_build_guard { } using namespace debug_build_guard; }
+#endif
+#endif
+
+#ifndef CV__DEBUG_NS_BEGIN
+#define CV__DEBUG_NS_BEGIN
+#define CV__DEBUG_NS_END
+#endif
+
+
 #ifdef __OPENCV_BUILD
 #include "cvconfig.h"
 #endif
@@ -62,10 +79,6 @@
 #define __CV_CAT(x, y) __CV_CAT_(x, y)
 #endif
 
-
-#if !defined _CRT_SECURE_NO_DEPRECATE && defined _MSC_VER && _MSC_VER > 1300
-#  define _CRT_SECURE_NO_DEPRECATE /* to avoid multiple Visual Studio warnings */
-#endif
 
 // undef problematic defines sometimes defined by system headers (windows.h in particular)
 #undef small
@@ -133,15 +146,21 @@
 #define CV_CPU_AVX_512CD        15
 #define CV_CPU_AVX_512DQ        16
 #define CV_CPU_AVX_512ER        17
-#define CV_CPU_AVX_512IFMA512   18
+#define CV_CPU_AVX_512IFMA512   18 // deprecated
+#define CV_CPU_AVX_512IFMA      18
 #define CV_CPU_AVX_512PF        19
 #define CV_CPU_AVX_512VBMI      20
 #define CV_CPU_AVX_512VL        21
 
 #define CV_CPU_NEON   100
 
+#define CV_CPU_VSX 200
+
+// CPU features groups
+#define CV_CPU_AVX512_SKX       256
+
 // when adding to this list remember to update the following enum
-#define CV_HARDWARE_MAX_FEATURE 255
+#define CV_HARDWARE_MAX_FEATURE 512
 
 /** @brief Available CPU features.
 */
@@ -164,12 +183,19 @@ enum CpuFeatures {
     CPU_AVX_512CD       = 15,
     CPU_AVX_512DQ       = 16,
     CPU_AVX_512ER       = 17,
-    CPU_AVX_512IFMA512  = 18,
+    CPU_AVX_512IFMA512  = 18, // deprecated
+    CPU_AVX_512IFMA     = 18,
     CPU_AVX_512PF       = 19,
     CPU_AVX_512VBMI     = 20,
     CPU_AVX_512VL       = 21,
 
-    CPU_NEON            = 100
+    CPU_NEON            = 100,
+
+    CPU_VSX             = 200,
+
+    CPU_AVX512_SKX      = 256, //!< Skylake-X with AVX-512F/CD/BW/DQ/VL
+
+    CPU_MAX_FEATURE     = 512  // see CV_HARDWARE_MAX_FEATURE
 };
 
 
@@ -178,7 +204,7 @@ enum CpuFeatures {
 
 /* fundamental constants */
 #define CV_PI   3.1415926535897932384626433832795
-#define CV_2PI 6.283185307179586476925286766559
+#define CV_2PI  6.283185307179586476925286766559
 #define CV_LOG2 0.69314718055994530941723212145818
 
 #if defined __ARM_FP16_FORMAT_IEEE \
@@ -231,12 +257,22 @@ Cv64suf;
 #  define DISABLE_OPENCV_24_COMPATIBILITY
 #endif
 
-#if (defined WIN32 || defined _WIN32 || defined WINCE || defined __CYGWIN__) && defined CVAPI_EXPORTS
-#  define CV_EXPORTS __declspec(dllexport)
-#elif defined __GNUC__ && __GNUC__ >= 4
-#  define CV_EXPORTS __attribute__ ((visibility ("default")))
+#ifdef CVAPI_EXPORTS
+# if (defined _WIN32 || defined WINCE || defined __CYGWIN__)
+#   define CV_EXPORTS __declspec(dllexport)
+# elif defined __GNUC__ && __GNUC__ >= 4
+#   define CV_EXPORTS __attribute__ ((visibility ("default")))
+# endif
+#endif
+
+#ifndef CV_EXPORTS
+# define CV_EXPORTS
+#endif
+
+#ifdef _MSC_VER
+#   define CV_EXPORTS_TEMPLATE
 #else
-#  define CV_EXPORTS
+#   define CV_EXPORTS_TEMPLATE CV_EXPORTS
 #endif
 
 #ifndef CV_DEPRECATED
@@ -303,6 +339,29 @@ Cv64suf;
 #endif
 
 /****************************************************************************************\
+*                                    static analysys                                     *
+\****************************************************************************************/
+
+// In practice, some macro are not processed correctly (noreturn is not detected).
+// We need to use simplified definition for them.
+#ifndef CV_STATIC_ANALYSIS
+# if defined(__KLOCWORK__) || defined(__clang_analyzer__) || defined(__COVERITY__)
+#   define CV_STATIC_ANALYSIS
+# endif
+#endif
+
+/****************************************************************************************\
+*                                    Thread sanitizer                                    *
+\****************************************************************************************/
+#ifndef CV_THREAD_SANITIZER
+# if defined(__has_feature)
+#   if __has_feature(thread_sanitizer)
+#     define CV_THREAD_SANITIZER
+#   endif
+# endif
+#endif
+
+/****************************************************************************************\
 *          exchange-add operation for atomic operations on reference counters            *
 \****************************************************************************************/
 
@@ -347,11 +406,25 @@ Cv64suf;
 
 
 /****************************************************************************************\
+*                                    C++ 11                                              *
+\****************************************************************************************/
+#ifndef CV_CXX11
+#  if __cplusplus >= 201103L || (defined(_MSC_VER) && _MSC_VER >= 1800)
+#    define CV_CXX11 1
+#  endif
+#else
+#  if CV_CXX11 == 0
+#    undef CV_CXX11
+#  endif
+#endif
+
+
+/****************************************************************************************\
 *                                    C++ Move semantics                                  *
 \****************************************************************************************/
 
 #ifndef CV_CXX_MOVE_SEMANTICS
-#  if __cplusplus >= 201103L || defined(__GXX_EXPERIMENTAL_CXX0X__) || defined(_MSC_VER) && _MSC_VER >= 1600
+#  if __cplusplus >= 201103L || defined(__GXX_EXPERIMENTAL_CXX0X__) || (defined(_MSC_VER) && _MSC_VER >= 1600)
 #    define CV_CXX_MOVE_SEMANTICS 1
 #  elif defined(__clang)
 #    if __has_feature(cxx_rvalue_references)
